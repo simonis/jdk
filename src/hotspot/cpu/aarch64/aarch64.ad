@@ -2361,6 +2361,8 @@ const bool Matcher::match_rule_supported(int opcode) {
 
   bool ret_value = true;
   switch (opcode) {
+    case Op_OnSpinWait:
+      return VM_Version::supports_on_spin_wait();
     case Op_CacheWB:
     case Op_CacheWBPreSync:
     case Op_CacheWBPostSync:
@@ -14050,6 +14052,53 @@ instruct signumF_reg(vRegF dst, vRegF src, vRegF zero, vRegF one) %{
     __ bsl(dst, __ T8B, one, src);
   %}
   ins_pipe(fp_uop_d);
+%}
+
+instruct onspinwait() %{
+  match(OnSpinWait);
+  ins_cost(INSN_COST);
+
+  format %{
+    $$template
+    if (os::is_MP()) {
+      if (UseNewCode) {
+        $$emit$$"NOP\t! membar_onspinwait"
+      }
+      else if (UseNewCode2) {
+        $$emit$$"NOP * 8\t! membar_onspinwait"
+      }
+      else if (UseNewCode3) {
+        $$emit$$"'ISB\t! membar_onspinwait"
+      }
+      else {
+        $$emit$$"yield\t! membar_onspinwait"
+      }
+    } else {
+      $$emit$$"MEMBAR-onspinwait ! (empty encoding)"
+    }
+  %}
+  ins_encode %{
+      if (UseNewCode) {
+        __ nop();
+      }
+      else if (UseNewCode2) {
+        __ nop();
+        __ nop();
+        __ nop();
+        __ nop();
+        __ nop();
+        __ nop();
+        __ nop();
+        __ nop();
+      }
+      else if (UseNewCode3) {
+        __ isb();
+      }
+      else {
+        __ yield();
+      }
+  %}
+  ins_pipe(pipe_class_empty);
 %}
 
 // ============================================================================

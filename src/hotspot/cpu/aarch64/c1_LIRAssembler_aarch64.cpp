@@ -3003,7 +3003,25 @@ void LIR_Assembler::membar_loadstore() { __ membar(MacroAssembler::LoadStore); }
 void LIR_Assembler::membar_storeload() { __ membar(MacroAssembler::StoreLoad); }
 
 void LIR_Assembler::on_spin_wait() {
-  Unimplemented();
+  if (UseNewCode) {
+    __ nop();
+  }
+  else if (UseNewCode2) {
+    __ nop();
+    __ nop();
+    __ nop();
+    __ nop();
+    __ nop();
+    __ nop();
+    __ nop();
+    __ nop();
+  }
+  else if (UseNewCode3) {
+    __ isb();
+  }
+  else {
+    __ yield();
+  }
 }
 
 void LIR_Assembler::get_thread(LIR_Opr result_reg) {

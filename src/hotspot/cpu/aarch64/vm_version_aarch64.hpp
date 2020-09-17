@@ -128,6 +128,8 @@ public:
     return (1 << ((_psr_info.ctr_el0 >> 16) & 0x0f)) * 4;
   }
   static bool supports_fast_class_init_checks() { return true; }
+
+  static bool supports_on_spin_wait() { return true; }
 };
 
 #endif // CPU_AARCH64_VM_VERSION_AARCH64_HPP
