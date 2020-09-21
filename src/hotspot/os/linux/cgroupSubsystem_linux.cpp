@@ -260,6 +260,7 @@ bool CgroupSubsystemFactory::determine_type(CgroupInfo* cg_infos,
     char tmproot[MAXPATHLEN+1];
     char tmpmount[MAXPATHLEN+1];
     char tmpcgroups[MAXPATHLEN+1];
+    char tmpsource[MAXPATHLEN+1];
     char *cptr = tmpcgroups;
     char *token;
 
@@ -289,9 +290,15 @@ bool CgroupSubsystemFactory::determine_type(CgroupInfo* cg_infos,
      * Example for host:
      * 34 28 0:29 / /sys/fs/cgroup/memory rw,nosuid,nodev,noexec,relatime shared:16 - cgroup cgroup rw,memory
      */
-    if (sscanf(p, "%*d %*d %*d:%*d %s %s %*[^-]- %s %*s %s", tmproot, tmpmount, tmp_fs_type, tmpcgroups) == 4) {
+    if (sscanf(p, "%*d %*d %*d:%*d %s %s %*[^-]- %s %s %s", tmproot, tmpmount, tmp_fs_type, tmpsource, tmpcgroups) == 5) {
       if (strcmp("cgroup", tmp_fs_type) != 0) {
         // Skip cgroup2 fs lines on hybrid or unified hierarchy.
+        continue;
+      }
+      if (strcmp("none", tmpsource) == 0) {
+        // Skip cpusets created manually or by cset/cpuset (https://github.com/lpechacek/cpuset)
+        // The "mount source" for these mounts is usually "none" while the source of "true" Cgroup
+        // controllers is usually "cgroup". But this is just another heuristic...
         continue;
       }
       any_cgroup_mounts_found = true;
