@@ -93,16 +93,23 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
 
   CompileLog* log = this->log();
   if (log != NULL) {
-    int rid = (receiver_count >= 0)? log->identify(profile.receiver(0)): -1;
-    int r2id = (rid != -1 && profile.has_receiver(1))? log->identify(profile.receiver(1)):-1;
+    if (receiver_count >= 0) {
+      int rc = 0;
+      while (profile.has_receiver(rc)) {
+        log->identify(profile.receiver(rc));
+        rc++;
+      }
+    }
     log->begin_elem("call method='%d' count='%d' prof_factor='%f'",
                     log->identify(callee), site_count, prof_factor);
     if (call_does_dispatch)  log->print(" virtual='1'");
     if (allow_inline)     log->print(" inline='1'");
     if (receiver_count >= 0) {
-      log->print(" receiver='%d' receiver_count='%d'", rid, receiver_count);
-      if (profile.has_receiver(1)) {
-        log->print(" receiver2='%d' receiver2_count='%d'", r2id, profile.receiver_count(1));
+      int rc = 0;
+      while (profile.has_receiver(rc)) {
+        log->print(" receiver%d='%d' receiver%d_count='%d' receiver%d_prob='%f'",
+        rc, log->identify(profile.receiver(rc)), rc, profile.receiver_count(rc), rc, profile.receiver_prob(rc));
+        rc++;
       }
     }
     if (callee->is_method_handle_intrinsic()) {

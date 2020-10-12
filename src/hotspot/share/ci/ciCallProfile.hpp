@@ -38,13 +38,14 @@ private:
   friend class ciMethod;
   friend class ciMethodHandle;
 
-  enum { MorphismLimit = 2 }; // Max call site's morphism we care about
   int  _limit;                // number of receivers have been determined
   int  _morphism;             // determined call site's morphism
   int  _count;                // # times has this call been executed
-  int  _receiver_count[MorphismLimit + 1]; // # times receivers have been seen
-  ciMethod* _method[MorphismLimit + 1];    // receivers methods
-  ciKlass*  _receiver[MorphismLimit + 1];  // receivers (exact)
+  // The following arrays are constrained by MorphismLimit which is
+  // itself constrained by TypeProfileWidth which is in the range (0..8).
+  int  _receiver_count[8 + 1]; // # times receivers have been seen
+  ciMethod* _method[8 + 1];    // receivers methods
+  ciKlass*  _receiver[8 + 1];  // receivers (exact)
 
   ciCallProfile() {
     _limit = 0;
@@ -53,6 +54,7 @@ private:
     _receiver_count[0] = -1;
     _method[0]   = NULL;
     _receiver[0] = NULL;
+    assert(MorphismLimit <= 8, "MorphismLimit must be <= 8");
   }
 
   void add_receiver(ciKlass* receiver, int receiver_count);

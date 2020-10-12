@@ -49,6 +49,7 @@
   f(uintx, ArraycopySrcPrefetchDistanceConstraintFunc)  \
   f(int,   AVX3ThresholdConstraintFunc)                 \
   f(uintx, TypeProfileLevelConstraintFunc)              \
+  f(intx, MorphismLimitConstraintFunc)                 \
   f(intx,  InitArrayShortSizeConstraintFunc)            \
   f(int ,  RTMTotalCountIncrRateConstraintFunc)         \
 COMPILER2_PRESENT(                                      \

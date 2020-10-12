@@ -635,6 +635,12 @@
           "% of major receiver type to all profiled receivers")             \
           range(0, 100)                                                     \
                                                                             \
+  product(intx, MorphismLimit, 2,                                           \
+          "Max number of polymorphic inlining to support."                  \
+          "Must be smaller or equal to TypeProfileWidth.")                  \
+          range(0, 8)                                                       \
+          constraint(MorphismLimitConstraintFunc,AfterErgo)                 \
+                                                                            \
   product(bool, PrintIntrinsics, false, DIAGNOSTIC,                         \
           "prints attempted and successful inlining of intrinsics")         \
                                                                             \

@@ -321,6 +321,18 @@ JVMFlag::Error TypeProfileLevelConstraintFunc(uintx value, bool verbose) {
   return JVMFlag::SUCCESS;
 }
 
+JVMFlag::Error MorphismLimitConstraintFunc(intx value, bool verbose) {
+  if (value > TypeProfileWidth) {
+      JVMFlag::printError(verbose,
+                          "MorphismLimit (" INTX_FORMAT ") "
+                          "must be <= TypeProfileWidth (" INTX_FORMAT ").\n",
+                          value, TypeProfileWidth);
+      return JVMFlag::VIOLATES_CONSTRAINT;
+  }
+
+  return JVMFlag::SUCCESS;
+}
+
 JVMFlag::Error InitArrayShortSizeConstraintFunc(intx value, bool verbose) {
   if (value % BytesPerLong != 0) {
     return JVMFlag::VIOLATES_CONSTRAINT;
