@@ -34,6 +34,7 @@
 #include "interpreter/interpreter.hpp"
 #include "memory/resourceArea.hpp"
 #include "opto/addnode.hpp"
+#include "opto/callGenerator.hpp"
 #include "opto/castnode.hpp"
 #include "opto/convertnode.hpp"
 #include "opto/graphKit.hpp"
@@ -602,19 +603,55 @@ void GraphKit::builtin_throw(Deoptimization::DeoptReason reason, Node* arg) {
       if (C->log() != NULL)
         C->log()->elem("hot_throw preallocated='1' reason='%s'",
                        Deoptimization::trap_reason_name(reason));
-      const TypeInstPtr* ex_con  = TypeInstPtr::make(ex_obj);
-      Node*              ex_node = _gvn.transform(ConNode::make(ex_con));
+      Node* ex_node;
+      if (UseNewCode) {
+        const TypeKlassPtr *ex_class = TypeKlassPtr::make(ex_obj->klass());
+        kill_dead_locals();
+        ex_node = new_instance(makecon(ex_class), NULL, NULL, true);
+        set_argument(0, ex_node);
+        //push(ex_node);
+        ciInstanceKlass *ex_inst = ex_obj->klass()->as_instance_klass();
+        ciMethod *init = ex_inst->find_method(ciSymbol::make("<init>"), ciSymbol::make("()V"));
 
-      // Clear the detail message of the preallocated exception object.
-      // Weblogic sometimes mutates the detail message of exceptions
-      // using reflection.
-      int offset = java_lang_Throwable::get_detailMessage_offset();
-      const TypePtr* adr_typ = ex_con->add_offset(offset);
+        //CallGenerator* cg = CallGenerator::for_direct_call(init);
+        //JVMState *new_jvms = cg->generate(sync_jvms());
 
-      Node *adr = basic_plus_adr(ex_node, ex_node, offset);
-      const TypeOopPtr* val_type = TypeOopPtr::make_from_klass(env()->String_klass());
-      Node *store = access_store_at(ex_node, adr, adr_typ, null(), val_type, T_OBJECT, IN_HEAP);
+        GraphKit kit(sync_jvms());
+        address target = SharedRuntime::get_resolve_opt_virtual_call_stub();
 
+        CallStaticJavaNode* call = new CallStaticJavaNode(kit.C, TypeFunc::make(init), target, init);
+        // Make an explicit receiver null_check as part of this call.
+        // Since we share a map with the caller, his JVMS gets adjusted.
+        //kit.null_check_receiver_before_call(init);
+        const int nargs = init->arg_size();
+        inc_sp(nargs);
+        Node* n = null_check_receiver();
+        dec_sp(nargs);
+        // Mark the call node as virtual, sort of:
+        call->set_optimized_virtual(true);
+        kit.set_arguments_for_java_call(call);
+        kit.set_edges_for_java_call(call, false, false);
+        Node* ret = kit.set_results_for_java_call(call, false);
+        kit.push_node(init->return_type()->basic_type(), ret);
+        JVMState *new_jvms = kit.transfer_exceptions_into_jvms();
+
+        add_exception_states_from(new_jvms);
+        set_jvms(new_jvms);
+      }
+      else {
+        const TypeInstPtr* ex_con  = TypeInstPtr::make(ex_obj);
+        ex_node = _gvn.transform(ConNode::make(ex_con));
+
+        // Clear the detail message of the preallocated exception object.
+        // Weblogic sometimes mutates the detail message of exceptions
+        // using reflection.
+        int offset = java_lang_Throwable::get_detailMessage_offset();
+        const TypePtr* adr_typ = ex_con->add_offset(offset);
+
+        Node *adr = basic_plus_adr(ex_node, ex_node, offset);
+        const TypeOopPtr* val_type = TypeOopPtr::make_from_klass(env()->String_klass());
+        Node *store = access_store_at(ex_node, adr, adr_typ, null(), val_type, T_OBJECT, IN_HEAP);
+      }
       add_exception_state(make_exception_state(ex_node));
       return;
     }

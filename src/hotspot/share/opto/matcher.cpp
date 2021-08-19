@@ -1248,7 +1248,7 @@ MachNode *Matcher::match_sfpt( SafePointNode *sfpt ) {
     if( mcall->is_MachCallJava() ) {
       MachCallJavaNode *mcall_java  = mcall->as_MachCallJava();
       const CallJavaNode *call_java =  call->as_CallJava();
-      assert(call_java->validate_symbolic_info(), "inconsistent info");
+      //assert(call_java->validate_symbolic_info(), "inconsistent info");
       method = call_java->method();
       mcall_java->_method = method;
       mcall_java->_optimized_virtual = call_java->is_optimized_virtual();
