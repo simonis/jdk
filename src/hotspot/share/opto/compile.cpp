@@ -4869,6 +4869,10 @@ void Compile::add_native_invoker(RuntimeStub* stub) {
   _native_invokers.append(stub);
 }
 
+void Compile::add_implicit_exception(jobject except) {
+  _implicit_exceptions.append(except);
+}
+
 Node* Compile::narrow_value(BasicType bt, Node* value, const Type* type, PhaseGVN* phase, bool transform_res) {
   if (type != NULL && phase->type(value)->higher_equal(type)) {
     return value;
@@ -4891,4 +4895,3 @@ Node* Compile::narrow_value(BasicType bt, Node* value, const Type* type, PhaseGV
   }
   return result;
 }
-

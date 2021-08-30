@@ -29,6 +29,7 @@
 #include "oops/oop.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/symbol.hpp"
+#include "opto/graphKit.hpp"
 #include "runtime/os.hpp"
 #include "utilities/vmEnums.hpp"
 
@@ -559,6 +560,8 @@ class java_lang_Throwable: AllStatic {
 
   // Allocate space for backtrace (created but stack trace not filled in)
   static void allocate_backtrace(Handle throwable, TRAPS);
+  // Fill in the stack frame for an implicit exception (no GC)
+  static void fill_in_stack_trace_of_implicit_exception(Handle throwable, GraphKit* gk);
   // Fill in current stack trace for throwable with preallocated backtrace (no GC)
   static void fill_in_stack_trace_of_preallocated_backtrace(Handle throwable);
   // Fill in current stack trace, can cause GC

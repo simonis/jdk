@@ -48,6 +48,7 @@ class ciEnv : StackObj {
   friend class CompileBroker;
   friend class Dependencies;  // for get_object, during logging
   friend class PrepareExtraDataClosure;
+  friend class GraphKit;
 
 private:
   Arena*           _arena;       // Alias for _ciEnv_arena except in init_shared_objects()
@@ -380,7 +381,8 @@ public:
                        bool                      has_unsafe_access,
                        bool                      has_wide_vectors,
                        RTMState                  rtm_state = NoRTM,
-                       const GrowableArrayView<RuntimeStub*>& native_invokers = GrowableArrayView<RuntimeStub*>::EMPTY);
+                       const GrowableArrayView<RuntimeStub*>& native_invokers = GrowableArrayView<RuntimeStub*>::EMPTY,
+                       const GrowableArrayView<jobject>& implicit_exceptions = GrowableArrayView<jobject>::EMPTY);
 
 
   // Access to certain well known ciObjects.

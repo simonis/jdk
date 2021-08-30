@@ -27,7 +27,9 @@
 #include "classfile/javaClasses.hpp"
 #include "ci/ciNativeEntryPoint.hpp"
 #include "ci/ciObjArray.hpp"
+#include "ci/ciUtilities.inline.hpp"
 #include "asm/register.hpp"
+#include "classfile/vmSymbols.hpp"
 #include "compiler/compileLog.hpp"
 #include "gc/shared/barrierSet.hpp"
 #include "gc/shared/c2/barrierSetC2.hpp"
@@ -48,6 +50,7 @@
 #include "opto/runtime.hpp"
 #include "opto/subtypenode.hpp"
 #include "runtime/deoptimization.hpp"
+#include "runtime/jniHandles.inline.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "utilities/bitMap.inline.hpp"
 #include "utilities/powerOfTwo.hpp"
@@ -578,7 +581,25 @@ void GraphKit::builtin_throw(Deoptimization::DeoptReason reason, Node* arg) {
       ex_obj = env()->ArithmeticException_instance();
       break;
     case Deoptimization::Reason_range_check:
-      ex_obj = env()->ArrayIndexOutOfBoundsException_instance();
+      if (UseNewCode2) {
+        VM_ENTRY_MARK;
+        InstanceKlass* ik = SystemDictionary::find_instance_klass(
+          vmSymbols::java_lang_ArrayIndexOutOfBoundsException(), Handle(), Handle());
+        if (ik != NULL) {
+          oop aioobe = ik->allocate_instance(THREAD);
+          if (!HAS_PENDING_EXCEPTION) {
+            Handle aioobe_h(THREAD, aioobe);
+            jobject aioobe_o = JNIHandles::make_global(aioobe_h);
+            C->add_implicit_exception(aioobe_o);
+            //env()->oop_recorder()->find_index(aioobe_o);
+            java_lang_Throwable::fill_in_stack_trace_of_implicit_exception(aioobe_h, this);
+            ex_obj = env()->get_instance(JNIHandles::resolve(aioobe_o));
+          }
+        }
+      }
+      else {
+        ex_obj = env()->ArrayIndexOutOfBoundsException_instance();
+      }
       break;
     case Deoptimization::Reason_class_check:
       if (java_bc() == Bytecodes::_aastore) {
@@ -609,26 +630,21 @@ void GraphKit::builtin_throw(Deoptimization::DeoptReason reason, Node* arg) {
         kill_dead_locals();
         ex_node = new_instance(makecon(ex_class), NULL, NULL, true);
         set_argument(0, ex_node);
-        //push(ex_node);
         ciInstanceKlass *ex_inst = ex_obj->klass()->as_instance_klass();
         ciMethod *init = ex_inst->find_method(ciSymbol::make("<init>"), ciSymbol::make("()V"));
 
         //CallGenerator* cg = CallGenerator::for_direct_call(init);
         //JVMState *new_jvms = cg->generate(sync_jvms());
+        // The following code is taken from CallGenerator::for_direct_call(init)::generate()
 
         GraphKit kit(sync_jvms());
+        //address target = init->get_Method()->verified_code_entry();
         address target = SharedRuntime::get_resolve_opt_virtual_call_stub();
 
         CallStaticJavaNode* call = new CallStaticJavaNode(kit.C, TypeFunc::make(init), target, init);
-        // Make an explicit receiver null_check as part of this call.
-        // Since we share a map with the caller, his JVMS gets adjusted.
-        //kit.null_check_receiver_before_call(init);
-        const int nargs = init->arg_size();
-        inc_sp(nargs);
-        Node* n = null_check_receiver();
-        dec_sp(nargs);
         // Mark the call node as virtual, sort of:
         call->set_optimized_virtual(true);
+        call->set_override_symbolic_info(true);
         kit.set_arguments_for_java_call(call);
         kit.set_edges_for_java_call(call, false, false);
         Node* ret = kit.set_results_for_java_call(call, false);

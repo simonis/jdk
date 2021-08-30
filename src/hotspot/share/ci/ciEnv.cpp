@@ -953,7 +953,8 @@ void ciEnv::register_method(ciMethod* target,
                             bool has_unsafe_access,
                             bool has_wide_vectors,
                             RTMState  rtm_state,
-                            const GrowableArrayView<RuntimeStub*>& native_invokers) {
+                            const GrowableArrayView<RuntimeStub*>& native_invokers,
+                            const GrowableArrayView<jobject>& implicit_exceptions) {
   VM_ENTRY_MARK;
   nmethod* nm = NULL;
   {
@@ -1043,7 +1044,8 @@ void ciEnv::register_method(ciMethod* target,
                                frame_words, oop_map_set,
                                handler_table, inc_table,
                                compiler, task()->comp_level(),
-                               native_invokers);
+                               native_invokers,
+                               implicit_exceptions);
 
     // Free codeBlobs
     code_buffer->free_blob();

@@ -59,6 +59,7 @@
 #include "oops/symbol.hpp"
 #include "oops/recordComponent.hpp"
 #include "oops/typeArrayOop.inline.hpp"
+#include "opto/graphKit.hpp"
 #include "prims/jvmtiExport.hpp"
 #include "prims/methodHandles.hpp"
 #include "prims/resolvedMethodTable.hpp"
@@ -2591,6 +2592,36 @@ void java_lang_Throwable::allocate_backtrace(Handle throwable, TRAPS) {
   set_backtrace(throwable(), bt.backtrace());
 }
 
+void java_lang_Throwable::fill_in_stack_trace_of_implicit_exception(Handle throwable, GraphKit* gk) {
+  // Fill in stack trace into preallocated backtrace (no GC)
+
+  assert(throwable->is_a(vmClasses::Throwable_klass()), "sanity check");
+
+  JavaThread* THREAD = JavaThread::current(); // For exception macros.
+
+  java_lang_Throwable::allocate_backtrace(throwable, CHECK);
+  objArrayHandle backtrace (THREAD, (objArrayOop)java_lang_Throwable::backtrace(throwable()));
+
+  ResourceMark rm(THREAD);
+
+  BacktraceBuilder bt(THREAD, backtrace);
+
+  // fill in as much stack trace as available
+  int chunk_count = 1;
+  bt.push(gk->method()->get_Method(), gk->bci(), CHECK);
+  JVMState* caller = gk->jvms()->caller();
+  while (caller != NULL) {
+    bt.push(caller->method()->get_Method(), caller->bci(), CHECK);
+    chunk_count++;
+    caller = caller->caller();
+  }
+  set_depth(throwable(), chunk_count);
+  log_info(stacktrace)("%s, %d", throwable->klass()->external_name(), chunk_count);
+
+  // We support the Throwable immutability protocol defined for Java 7.
+  java_lang_Throwable::set_stacktrace(throwable(), java_lang_Throwable::unassigned_stacktrace());
+  assert(java_lang_Throwable::unassigned_stacktrace() != NULL, "not initialized");
+}
 
 void java_lang_Throwable::fill_in_stack_trace_of_preallocated_backtrace(Handle throwable) {
   // Fill in stack trace into preallocated backtrace (no GC)

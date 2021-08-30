@@ -502,7 +502,8 @@ nmethod* nmethod::new_nmethod(const methodHandle& method,
   ImplicitExceptionTable* nul_chk_table,
   AbstractCompiler* compiler,
   int comp_level,
-  const GrowableArrayView<RuntimeStub*>& native_invokers
+  const GrowableArrayView<RuntimeStub*>& native_invokers,
+  const GrowableArrayView<jobject>& implicit_exceptions
 #if INCLUDE_JVMCI
   , char* speculations,
   int speculations_len,
@@ -525,6 +526,7 @@ nmethod* nmethod::new_nmethod(const methodHandle& method,
       + adjust_pcs_size(debug_info->pcs_size())
       + align_up((int)dependencies->size_in_bytes(), oopSize)
       + align_up(checked_cast<int>(native_invokers.data_size_in_bytes()), oopSize)
+      + align_up(checked_cast<int>(implicit_exceptions.data_size_in_bytes()), oopSize)
       + align_up(handler_table->size_in_bytes()    , oopSize)
       + align_up(nul_chk_table->size_in_bytes()    , oopSize)
 #if INCLUDE_JVMCI
@@ -541,7 +543,8 @@ nmethod* nmethod::new_nmethod(const methodHandle& method,
             nul_chk_table,
             compiler,
             comp_level,
-            native_invokers
+            native_invokers,
+            implicit_exceptions
 #if INCLUDE_JVMCI
             , speculations,
             speculations_len,
@@ -727,7 +730,8 @@ nmethod::nmethod(
   ImplicitExceptionTable* nul_chk_table,
   AbstractCompiler* compiler,
   int comp_level,
-  const GrowableArrayView<RuntimeStub*>& native_invokers
+  const GrowableArrayView<RuntimeStub*>& native_invokers,
+  const GrowableArrayView<jobject>& implicit_exceptions
 #if INCLUDE_JVMCI
   , char* speculations,
   int speculations_len,
@@ -805,7 +809,8 @@ nmethod::nmethod(
     _scopes_pcs_offset       = scopes_data_offset    + align_up(debug_info->data_size       (), oopSize);
     _dependencies_offset     = _scopes_pcs_offset    + adjust_pcs_size(debug_info->pcs_size());
     _native_invokers_offset  = _dependencies_offset  + align_up((int)dependencies->size_in_bytes(), oopSize);
-    _handler_table_offset    = _native_invokers_offset + align_up(checked_cast<int>(native_invokers.data_size_in_bytes()), oopSize);
+    _implicit_excepts_offset = _native_invokers_offset + align_up(checked_cast<int>(native_invokers.data_size_in_bytes()), oopSize);
+    _handler_table_offset    = _implicit_excepts_offset + align_up(checked_cast<int>(implicit_exceptions.data_size_in_bytes()), oopSize);
     _nul_chk_table_offset    = _handler_table_offset + align_up(handler_table->size_in_bytes(), oopSize);
 #if INCLUDE_JVMCI
     _speculations_offset     = _nul_chk_table_offset + align_up(nul_chk_table->size_in_bytes(), oopSize);
@@ -830,6 +835,11 @@ nmethod::nmethod(
     if (native_invokers.is_nonempty()) { // can not get address of zero-length array
       // Copy native stubs
       memcpy(native_invokers_begin(), native_invokers.adr_at(0), native_invokers.data_size_in_bytes());
+    }
+    if (implicit_exceptions.is_nonempty()) {
+      // Copy global handles for the implcit exceptions created for this
+      // nmethod such that we can release them once the nmethod gets unloaded.
+      memcpy(implicit_exceptions_begin(), implicit_exceptions.adr_at(0), implicit_exceptions.data_size_in_bytes());
     }
     clear_unloading_state();
 
@@ -1240,6 +1250,13 @@ void nmethod::make_unloaded() {
     // Clear ICStubs and release any CompiledICHolders.
     CompiledICLocker ml(this);
     clear_ic_callsites();
+  }
+
+  // Release implicit exceptions which have been created for this nmethod
+  jobject* implicit_exception = implicit_exceptions_begin();
+  while (implicit_exception < implicit_exceptions_end()) {
+    assert(*implicit_exception != NULL, "Must be a valid globel JNI handle");
+    JNIHandles::destroy_global(*implicit_exception++);
   }
 
   // Unregister must be done before the state change

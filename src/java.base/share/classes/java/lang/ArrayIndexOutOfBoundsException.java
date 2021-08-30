@@ -40,7 +40,7 @@ public class ArrayIndexOutOfBoundsException extends IndexOutOfBoundsException {
      * message.
      */
     public ArrayIndexOutOfBoundsException() {
-        super();
+        super("XXXXXXXXXXXX");
     }
 
     /**
