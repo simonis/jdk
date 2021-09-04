@@ -36,13 +36,15 @@
  *                   -XX:+PrintCompilation -XX:+UnlockDiagnosticVMOptions -XX:+PrintInlining
  *                   -XX:CompileCommand=inline,compiler.exceptions.StackFramesInFastThrow::throwImplicitException
  *                   -XX:CompileCommand=inline,compiler.exceptions.StackFramesInFastThrow::level2
- *                   -XX:CompileCommand=option,compiler.exceptions.StackFramesInFastThrow::level1,PrintOptoAssembly
  *                   -XX:PerMethodTrapLimit=0 compiler.exceptions.StackFramesInFastThrow
  */
 
 package compiler.exceptions;
 
 import java.lang.reflect.Method;
+import java.util.HashMap;
+
+import jdk.test.lib.Asserts;
 import jdk.test.whitebox.WhiteBox;
 
 public class StackFramesInFastThrow {
@@ -53,10 +55,20 @@ public class StackFramesInFastThrow {
         ARRAY_STORE_EXCEPTION,
         CLASS_CAST_EXCEPTION
     }
+    public enum CompMode {
+        INTERPRETED,
+        C2,
+        C2_RECOMPILED
+    }
+    public enum TestMode {
+        STACKTRACES_IN_FASTTHROW,
+        OMIT_STACKTRACES_IN_FASTTHROW,
+        OMIT_STACKTRACES_IN_FASTTHROW_WITH_STACKFRAME
+    }
 
     private static final WhiteBox WB = WhiteBox.getWhiteBox();
-
     private static String[] string_a = new String[1];
+    private static boolean DEBUG = Boolean.getBoolean("DEBUG");
 
     public static Object throwImplicitException(ImplicitException type, Object[] object_a) {
         switch (type) {
@@ -87,39 +99,138 @@ public class StackFramesInFastThrow {
         return level2(type, object_a);
     }
 
+    private static void compile(Method m) {
+        Asserts.assertFalse(WB.isMethodCompiled(m), "Method shouldn't be compiled.");
+        WB.enqueueMethodForCompilation(m, 4);
+        Asserts.assertEQ(WB.getMethodCompilationLevel(m), 4, "Method should be compiled at level 4.");
+    }
+
+    private static void unload(Method m) {
+        Asserts.assertEQ(WB.getMethodCompilationLevel(m), 4, "Method should be compiled at level 4.");
+        if (DEBUG) System.console().readLine();
+        WB.deoptimizeMethod(m);  // Makes the nmethod "not entrant".
+        WB.forceNMethodSweep();  // Makes all "not entrant" nmethods "zombie". This requires
+        WB.forceNMethodSweep();  // two sweeps, see 'nmethod::can_convert_to_zombie()' for why.
+        WB.forceNMethodSweep();  // Need third sweep to actually unload/free all "zombie" nmethods.
+        if (DEBUG) System.console().readLine();
+        System.gc();
+        if (DEBUG) System.console().readLine();
+    }
+
+    private static void recompile(Method m) {
+        unload(m);
+        compile(m);
+    }
+
+    private static boolean exceptionsEqual(Exception e1, Exception e2) {
+        if (e1.getClass() == e2.getClass()) {
+            if (e1.getMessage() == e2.getMessage() || e1.getMessage().equals(e2.getMessage())) {
+                StackTraceElement[] ste1 = e1.getStackTrace();
+                StackTraceElement[] ste2 = e2.getStackTrace();
+                if (ste1.length == ste2.length) {
+                    for (int i = 0; i < ste1.length; i++) {
+                        if (!ste1[i].equals(ste2[i])) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static HashMap<ImplicitException, Exception> lastException = new HashMap<>();
+
+    private static void checkResult(ImplicitException implExcp, Exception catchedExcp, CompMode compMode, TestMode testMode) {
+        catchedExcp.printStackTrace(System.out);
+
+        if (!(catchedExcp instanceof ArrayIndexOutOfBoundsException)) return;
+
+        if (compMode == CompMode.INTERPRETED) {
+            // Exception thrown by the interpreter should have the full stack trace
+            Asserts.assertTrue(catchedExcp.getStackTrace()[3].getMethodName().equals("main"),
+                               "Can't see main() in interpreter stack trace");
+            lastException.put(implExcp, catchedExcp);
+        }
+        if (compMode == CompMode.C2 || compMode == CompMode.C2_RECOMPILED) {
+            switch (testMode) {
+                case STACKTRACES_IN_FASTTHROW : {
+                    Asserts.assertTrue(catchedExcp.getStackTrace()[3].getMethodName().equals("main"),
+                                       "-XX:-OmitStackTraceInFastThrow should generate full stack trace");
+                    Asserts.assertTrue(exceptionsEqual(lastException.get(implExcp), catchedExcp),
+                                       "With -XX:-OmitStackTraceInFastThrow interpreter and C2 generated exceptions should be equal");
+                    break;
+                }
+                case OMIT_STACKTRACES_IN_FASTTHROW : {
+                    Asserts.assertEQ(catchedExcp.getStackTrace().length, 0,
+                                     "-XX:+OmitStackTraceInFastThrow should generate an emtpy stack trace");
+                    if (compMode == CompMode.C2_RECOMPILED) {
+                        Asserts.assertEQ(lastException.get(implExcp), catchedExcp,
+                                         "With -XX:+OmitStackTraceInFastThrow all exceptions should be the same singleton instance");
+                    }
+                    break;
+                }
+                case OMIT_STACKTRACES_IN_FASTTHROW_WITH_STACKFRAME : {
+                    Asserts.assertTrue(catchedExcp.getStackTrace()[2].getMethodName().equals("level1"),
+                                       "-XX:+OmitStackTraceInFastThrow -XX:+UseNewCode2 should generate a minimal stack trace");
+                    if (compMode == CompMode.C2_RECOMPILED) {
+                        Asserts.assertTrue(exceptionsEqual(lastException.get(implExcp), catchedExcp),
+                                                           "With -XX:+OmitStackTraceInFastThrow -XX:+UseNewCode2 C2 generated exceptions should be equal");
+                        Asserts.assertNE(lastException.get(implExcp), catchedExcp,
+                                "With -XX:+OmitStackTraceInFastThrow -XX:+UseNewCode2 new exceptions should be generated for every nmethod");
+                    }
+                    break;
+                }
+            }
+            lastException.put(implExcp, catchedExcp);
+        }
+    }
+
+    private static void setFlags(TestMode testMode) {
+        if (testMode == TestMode.STACKTRACES_IN_FASTTHROW) {
+            WB.setBooleanVMFlag("OmitStackTraceInFastThrow", false);
+        }
+        else {
+            WB.setBooleanVMFlag("OmitStackTraceInFastThrow", true);
+        }
+        if (testMode == TestMode.OMIT_STACKTRACES_IN_FASTTHROW_WITH_STACKFRAME) {
+            WB.setBooleanVMFlag("UseNewCode2", true);
+        }
+        System.out.println("==========================================================");
+        System.out.println("testMode=" + testMode + " OmitStackTraceInFastThrow=" + WB.getBooleanVMFlag("OmitStackTraceInFastThrow") + " UseNewCode2=" + WB.getBooleanVMFlag("UseNewCode2"));
+        System.out.println("==========================================================");
+    }
+
     public static void main(String[] args) throws Exception {
+
         if (!WB.getBooleanVMFlag("ProfileTraps")) {
             // The fast-throw optimzation only works if we're running with -XX:+ProfileTraps
             return;
         }
-        boolean omit = WB.getBooleanVMFlag("OmitStackTraceInFastThrow");
+
         Method level1_m = StackFramesInFastThrow.class.getDeclaredMethod("level1", new Class[] { ImplicitException.class, Object[].class});
-        for (int i = 0; i < 2; i++) {
-            for (ImplicitException ex : ImplicitException.values()) {
-                try {
-                    level1(ex, ex == ImplicitException.NULL_POINTER_EXCEPTION ? null : string_a);
-                } catch (Exception e) {
-                    if (i == 0 || i == 1) {
-                        e.printStackTrace(System.out);
+
+        for (TestMode testMode : TestMode.values()) {
+            setFlags(testMode);
+            for (CompMode compMode : CompMode.values()) {
+                for (ImplicitException impExcp : ImplicitException.values()) {
+                    try {
+                        level1(impExcp, impExcp == ImplicitException.NULL_POINTER_EXCEPTION ? null : string_a);
+                    } catch (Exception catchedExcp) {
+                        checkResult(impExcp, catchedExcp, compMode, testMode);
+                        continue;
                     }
-                    if (i == 0) {
-                        // Exception thrown by the interpreter should have the full stack trace
-                        if (!e.getStackTrace()[3].getMethodName().equals("main")) {
-                            throw new Exception("Can't see main() in interpreter stack trace");
-                        }
-                    }
-                    if (i == 1 && omit) {
-                        if (e.getStackTrace().length != 0) {
-                            throw new Exception("-XX:+OmitStackTraceInFastThrow should generate an emtpy stack trace");
-                        }
-                    }
-                    continue;
+                    throw new Exception("Should not happen");
                 }
-                throw new Exception("Should not happen");
+                if (compMode == CompMode.INTERPRETED) {
+                    compile(level1_m);
+                }
+                if (compMode == CompMode.C2) {
+                    recompile(level1_m);
+                }
             }
-            if (i == 0) {
-                WB.enqueueMethodForCompilation(level1_m, 4);
-            }
+            unload(level1_m);
         }
     }
 }

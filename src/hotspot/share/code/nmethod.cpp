@@ -1252,13 +1252,6 @@ void nmethod::make_unloaded() {
     clear_ic_callsites();
   }
 
-  // Release implicit exceptions which have been created for this nmethod
-  jobject* implicit_exception = implicit_exceptions_begin();
-  while (implicit_exception < implicit_exceptions_end()) {
-    assert(*implicit_exception != NULL, "Must be a valid globel JNI handle");
-    JNIHandles::destroy_global(*implicit_exception++);
-  }
-
   // Unregister must be done before the state change
   {
     MutexLocker ml(SafepointSynchronize::is_at_safepoint() ? NULL : CodeCache_lock,
@@ -1533,6 +1526,13 @@ void nmethod::flush() {
     ExceptionCache* next = ec->next();
     delete ec;
     ec = next;
+  }
+
+  // Release implicit exceptions which have been created for this nmethod
+  jobject* implicit_exception = implicit_exceptions_begin();
+  while (implicit_exception < implicit_exceptions_end()) {
+    assert(*implicit_exception != NULL, "Must be a valid globel JNI handle");
+    JNIHandles::destroy_global(*implicit_exception++);
   }
 
   Universe::heap()->flush_nmethod(this);
