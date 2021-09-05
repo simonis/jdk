@@ -29,11 +29,11 @@
 #include "oops/oop.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/symbol.hpp"
-#include "opto/graphKit.hpp"
 #include "runtime/os.hpp"
 #include "utilities/vmEnums.hpp"
 
 class RecordComponent;
+class GraphKit;
 
 // Interface for manipulating the basic Java classes.
 

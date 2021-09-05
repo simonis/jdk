@@ -24,19 +24,19 @@
  /*
  * @test
  * @bug 9999999
- * @summary Test presence of at least one stack frame in imlicit exceptions
+ * @summary Test -XX:+/-OmitStackTraceInFastThrow and -XX:+/-StackFrameInFastThrow
  *
  * @requires vm.compiler2.enabled
+ * @requires vm.compMode != "Xcomp"
  *
  * @library /test/lib
  * @build jdk.test.whitebox.WhiteBox
  * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
  * @run main/othervm -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
  *                   -XX:+UseSerialGC -Xbatch -XX:-UseOnStackReplacement -XX:-TieredCompilation
- *                   -XX:+PrintCompilation -XX:+UnlockDiagnosticVMOptions -XX:+PrintInlining
- *                   -XX:CompileCommand=inline,compiler.exceptions.StackFramesInFastThrow::throwImplicitException
- *                   -XX:CompileCommand=inline,compiler.exceptions.StackFramesInFastThrow::level2
- *                   -XX:PerMethodTrapLimit=0 compiler.exceptions.StackFramesInFastThrow
+ *                   -XX:CompileCommand=inline,compiler.exceptions.StackFrameInFastThrow::throwImplicitException
+ *                   -XX:CompileCommand=inline,compiler.exceptions.StackFrameInFastThrow::level2
+ *                   -XX:PerMethodTrapLimit=0 compiler.exceptions.StackFrameInFastThrow
  */
 
 package compiler.exceptions;
@@ -47,7 +47,7 @@ import java.util.HashMap;
 import jdk.test.lib.Asserts;
 import jdk.test.whitebox.WhiteBox;
 
-public class StackFramesInFastThrow {
+public class StackFrameInFastThrow {
     public enum ImplicitException {
         NULL_POINTER_EXCEPTION,
         ARITHMETIC_EXCEPTION,
@@ -145,8 +145,6 @@ public class StackFramesInFastThrow {
     private static void checkResult(ImplicitException implExcp, Exception catchedExcp, CompMode compMode, TestMode testMode) {
         catchedExcp.printStackTrace(System.out);
 
-        if (!(catchedExcp instanceof ArrayIndexOutOfBoundsException)) return;
-
         if (compMode == CompMode.INTERPRETED) {
             // Exception thrown by the interpreter should have the full stack trace
             Asserts.assertTrue(catchedExcp.getStackTrace()[3].getMethodName().equals("main"),
@@ -173,12 +171,12 @@ public class StackFramesInFastThrow {
                 }
                 case OMIT_STACKTRACES_IN_FASTTHROW_WITH_STACKFRAME : {
                     Asserts.assertTrue(catchedExcp.getStackTrace()[2].getMethodName().equals("level1"),
-                                       "-XX:+OmitStackTraceInFastThrow -XX:+UseNewCode2 should generate a minimal stack trace");
+                                       "-XX:+OmitStackTraceInFastThrow -XX:+StackFrameInFastThrow should generate a minimal stack trace");
                     if (compMode == CompMode.C2_RECOMPILED) {
                         Asserts.assertTrue(exceptionsEqual(lastException.get(implExcp), catchedExcp),
-                                                           "With -XX:+OmitStackTraceInFastThrow -XX:+UseNewCode2 C2 generated exceptions should be equal");
+                                                           "With -XX:+OmitStackTraceInFastThrow -XX:+StackFrameInFastThrow C2 generated exceptions should be equal");
                         Asserts.assertNE(lastException.get(implExcp), catchedExcp,
-                                "With -XX:+OmitStackTraceInFastThrow -XX:+UseNewCode2 new exceptions should be generated for every nmethod");
+                                "With -XX:+OmitStackTraceInFastThrow -XX:+StackFrameInFastThrow new exceptions should be generated for every nmethod");
                     }
                     break;
                 }
@@ -193,13 +191,23 @@ public class StackFramesInFastThrow {
         }
         else {
             WB.setBooleanVMFlag("OmitStackTraceInFastThrow", true);
+            WB.setBooleanVMFlag("StackFrameInFastThrow", false);
         }
         if (testMode == TestMode.OMIT_STACKTRACES_IN_FASTTHROW_WITH_STACKFRAME) {
-            WB.setBooleanVMFlag("UseNewCode2", true);
+            WB.setBooleanVMFlag("StackFrameInFastThrow", true);
         }
         System.out.println("==========================================================");
-        System.out.println("testMode=" + testMode + " OmitStackTraceInFastThrow=" + WB.getBooleanVMFlag("OmitStackTraceInFastThrow") + " UseNewCode2=" + WB.getBooleanVMFlag("UseNewCode2"));
+        System.out.println("testMode=" + testMode +
+                           " OmitStackTraceInFastThrow=" + WB.getBooleanVMFlag("OmitStackTraceInFastThrow") +
+                           " StackFrameInFastThrow=" + WB.getBooleanVMFlag("StackFrameInFastThrow"));
         System.out.println("==========================================================");
+    }
+
+    private static void printCompMode(CompMode compMode) {
+        System.out.println("----------------------------------------------------------");
+        System.out.println("compMode=" + compMode);
+        System.out.println("----------------------------------------------------------");
+
     }
 
     public static void main(String[] args) throws Exception {
@@ -209,11 +217,12 @@ public class StackFramesInFastThrow {
             return;
         }
 
-        Method level1_m = StackFramesInFastThrow.class.getDeclaredMethod("level1", new Class[] { ImplicitException.class, Object[].class});
+        Method level1_m = StackFrameInFastThrow.class.getDeclaredMethod("level1", new Class[] { ImplicitException.class, Object[].class});
 
         for (TestMode testMode : TestMode.values()) {
             setFlags(testMode);
             for (CompMode compMode : CompMode.values()) {
+                printCompMode(compMode);
                 for (ImplicitException impExcp : ImplicitException.values()) {
                     try {
                         level1(impExcp, impExcp == ImplicitException.NULL_POINTER_EXCEPTION ? null : string_a);

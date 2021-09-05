@@ -575,37 +575,19 @@ void GraphKit::builtin_throw(Deoptimization::DeoptReason reason, Node* arg) {
     ciInstance* ex_obj = NULL;
     switch (reason) {
     case Deoptimization::Reason_null_check:
-      ex_obj = env()->NullPointerException_instance();
+      ex_obj = env()->NullPointerException_instance(this);
       break;
     case Deoptimization::Reason_div0_check:
-      ex_obj = env()->ArithmeticException_instance();
+      ex_obj = env()->ArithmeticException_instance(this);
       break;
     case Deoptimization::Reason_range_check:
-      if (UseNewCode2) {
-        VM_ENTRY_MARK;
-        InstanceKlass* ik = SystemDictionary::find_instance_klass(
-          vmSymbols::java_lang_ArrayIndexOutOfBoundsException(), Handle(), Handle());
-        if (ik != NULL) {
-          oop aioobe = ik->allocate_instance(THREAD);
-          if (!HAS_PENDING_EXCEPTION) {
-            Handle aioobe_h(THREAD, aioobe);
-            jobject aioobe_o = JNIHandles::make_global(aioobe_h);
-            C->add_implicit_exception(aioobe_o);
-            //env()->oop_recorder()->find_index(aioobe_o);
-            java_lang_Throwable::fill_in_stack_trace_of_implicit_exception(aioobe_h, this);
-            ex_obj = env()->get_instance(JNIHandles::resolve(aioobe_o));
-          }
-        }
-      }
-      else {
-        ex_obj = env()->ArrayIndexOutOfBoundsException_instance();
-      }
+      ex_obj = env()->ArrayIndexOutOfBoundsException_instance(this);
       break;
     case Deoptimization::Reason_class_check:
       if (java_bc() == Bytecodes::_aastore) {
-        ex_obj = env()->ArrayStoreException_instance();
+        ex_obj = env()->ArrayStoreException_instance(this);
       } else {
-        ex_obj = env()->ClassCastException_instance();
+        ex_obj = env()->ClassCastException_instance(this);
       }
       break;
     default:

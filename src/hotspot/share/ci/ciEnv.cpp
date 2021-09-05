@@ -321,7 +321,40 @@ ciInstance* ciEnv::get_or_create_exception(jobject& handle, Symbol* name) {
   return obj == NULL? NULL: get_object(obj)->as_instance();
 }
 
-ciInstance* ciEnv::ArrayIndexOutOfBoundsException_instance() {
+// ------------------------------------------------------------------
+// helper for implicit exception creation
+ciInstance* ciEnv::create_implicit_exception(Symbol* name, GraphKit* gk) {
+  assert(is_c2_compile(this->task()->comp_level()), "Should only be called for C2 compiles");
+  VM_ENTRY_MARK;
+  InstanceKlass* ik = SystemDictionary::find_instance_klass(name, Handle(), Handle());
+  jobject objh = NULL;
+  if (ik != NULL) {
+    oop obj = ik->allocate_instance(THREAD);
+    if (!HAS_PENDING_EXCEPTION) {
+      // nmethods are no strong roots so we have to create a global JNI handle
+      // for the created exception in order to keep it alive accross GCs.
+      Handle handle = Handle(THREAD, obj);
+      objh = JNIHandles::make_global(handle);
+      Compile* C = (Compile*)compiler_data();
+      // Record exception handle so we can free it later when the nmethod is unloaded (see nmethod::flush())
+      C->add_implicit_exception(objh);
+      java_lang_Throwable::fill_in_stack_trace_of_implicit_exception(handle, gk);
+    }
+  }
+  if (HAS_PENDING_EXCEPTION) {
+    CLEAR_PENDING_EXCEPTION;
+    return NULL;
+  } else {
+    oop obj = JNIHandles::resolve(objh);
+    return obj == NULL? NULL: get_object(obj)->as_instance();
+  }
+}
+
+ciInstance* ciEnv::ArrayIndexOutOfBoundsException_instance(GraphKit* gk) {
+  if (StackFrameInFastThrow) {
+    ciInstance* excp = create_implicit_exception(vmSymbols::java_lang_ArrayIndexOutOfBoundsException(), gk);
+    if (excp != NULL) return excp;
+  }
   if (_ArrayIndexOutOfBoundsException_instance == NULL) {
     _ArrayIndexOutOfBoundsException_instance
           = get_or_create_exception(_ArrayIndexOutOfBoundsException_handle,
@@ -329,7 +362,11 @@ ciInstance* ciEnv::ArrayIndexOutOfBoundsException_instance() {
   }
   return _ArrayIndexOutOfBoundsException_instance;
 }
-ciInstance* ciEnv::ArrayStoreException_instance() {
+ciInstance* ciEnv::ArrayStoreException_instance(GraphKit* gk) {
+  if (StackFrameInFastThrow) {
+    ciInstance* excp = create_implicit_exception(vmSymbols::java_lang_ArrayStoreException(), gk);
+    if (excp != NULL) return excp;
+  }
   if (_ArrayStoreException_instance == NULL) {
     _ArrayStoreException_instance
           = get_or_create_exception(_ArrayStoreException_handle,
@@ -337,13 +374,36 @@ ciInstance* ciEnv::ArrayStoreException_instance() {
   }
   return _ArrayStoreException_instance;
 }
-ciInstance* ciEnv::ClassCastException_instance() {
+ciInstance* ciEnv::ClassCastException_instance(GraphKit* gk) {
+  if (StackFrameInFastThrow) {
+    ciInstance* excp = create_implicit_exception(vmSymbols::java_lang_ClassCastException(), gk);
+    if (excp != NULL) return excp;
+  }
   if (_ClassCastException_instance == NULL) {
     _ClassCastException_instance
           = get_or_create_exception(_ClassCastException_handle,
           vmSymbols::java_lang_ClassCastException());
   }
   return _ClassCastException_instance;
+}
+
+ciInstance *ciEnv::NullPointerException_instance(GraphKit *gk) {
+  if (StackFrameInFastThrow) {
+    ciInstance *excp = create_implicit_exception(vmSymbols::java_lang_NullPointerException(), gk);
+    if (excp != NULL)
+      return excp;
+  }
+  assert(_NullPointerException_instance != NULL, "initialization problem");
+  return _NullPointerException_instance;
+}
+ciInstance *ciEnv::ArithmeticException_instance(GraphKit *gk) {
+  if (StackFrameInFastThrow) {
+    ciInstance *excp = create_implicit_exception(vmSymbols::java_lang_ArithmeticException(), gk);
+    if (excp != NULL)
+      return excp;
+  }
+  assert(_ArithmeticException_instance != NULL, "initialization problem");
+  return _ArithmeticException_instance;
 }
 
 ciInstance* ciEnv::the_null_string() {

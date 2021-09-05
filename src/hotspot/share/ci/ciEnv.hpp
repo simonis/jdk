@@ -37,6 +37,7 @@
 
 class CompileTask;
 class OopMapSet;
+class GraphKit;
 
 // ciEnv
 //
@@ -229,6 +230,8 @@ private:
 
   ciInstance* get_or_create_exception(jobject& handle, Symbol* name);
 
+  ciInstance* create_implicit_exception(Symbol* name, GraphKit* gk);
+
   // Get a ciMethod representing either an unfound method or
   // a method with an unloaded holder.  Ensures uniqueness of
   // the result.
@@ -393,19 +396,13 @@ public:
   VM_CLASSES_DO(VM_CLASS_FUNC)
 #undef VM_CLASS_FUNC
 
-  ciInstance* NullPointerException_instance() {
-    assert(_NullPointerException_instance != NULL, "initialization problem");
-    return _NullPointerException_instance;
-  }
-  ciInstance* ArithmeticException_instance() {
-    assert(_ArithmeticException_instance != NULL, "initialization problem");
-    return _ArithmeticException_instance;
-  }
+  ciInstance* NullPointerException_instance(GraphKit* gk);
+  ciInstance* ArithmeticException_instance(GraphKit* gk);
 
   // Lazy constructors:
-  ciInstance* ArrayIndexOutOfBoundsException_instance();
-  ciInstance* ArrayStoreException_instance();
-  ciInstance* ClassCastException_instance();
+  ciInstance* ArrayIndexOutOfBoundsException_instance(GraphKit* gk);
+  ciInstance* ArrayStoreException_instance(GraphKit* gk);
+  ciInstance* ClassCastException_instance(GraphKit* gk);
 
   ciInstance* the_null_string();
   ciInstance* the_min_jint_string();

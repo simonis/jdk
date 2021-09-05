@@ -964,7 +964,7 @@ class Compile : public Phase {
 
   const GrowableArray<RuntimeStub*> native_invokers() const { return _native_invokers; }
 
-  void add_implicit_exception(jobject except);
+  void add_implicit_exception(jobject except) { _implicit_exceptions.append(except); }
 
   const GrowableArray<jobject> implicit_exceptions() const { return _implicit_exceptions; }
 
