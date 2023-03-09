@@ -48,6 +48,7 @@ static const size_t PERFDATA_FILENAME_LEN = sizeof(PERFDATA_NAME) +
                                             UINT_CHARS + 1;
 
 char*                    PerfMemory::_start = nullptr;
+char*                    PerfMemory::_shared_start = nullptr;
 char*                    PerfMemory::_end = nullptr;
 char*                    PerfMemory::_top = nullptr;
 size_t                   PerfMemory::_capacity = 0;

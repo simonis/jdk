@@ -529,6 +529,7 @@ class os: AllStatic {
     compiler_thread,
     watcher_thread,
     asynclog_thread,   // dedicated to flushing logs
+    asyncperf_thread,  // dedicated to writing hsperf counters with -XX:+PerfAsyncSharedMem
     os_thread
   };
 

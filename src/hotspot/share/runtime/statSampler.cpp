@@ -30,6 +30,7 @@
 #include "memory/resourceArea.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/arguments.hpp"
+#include "runtime/globals_extension.hpp"
 #include "runtime/java.hpp"
 #include "runtime/javaCalls.hpp"
 #include "runtime/os.hpp"
@@ -71,10 +72,57 @@ void StatSampler::initialize() {
 
 }
 
+class AsyncPerfWriter : public NonJavaThread {
+  friend class StatSampler;
+  private:
+    volatile bool _initialized;
+  public:
+  AsyncPerfWriter() : _initialized(false) {
+    if (!os::create_thread(this, os::asyncperf_thread)) {
+      log_warning(perf, thread)("PerfAsyncSharedMem failed to create thread.");
+      FLAG_SET_ERGO(PerfAsyncSharedMem, false);
+    } else {
+      _initialized = true;
+    }
+  }
+  void pre_run() override {
+    NonJavaThread::pre_run();
+    log_debug(perf, thread)("Starting async perfThread tid = " INTX_FORMAT, os::current_thread_id());
+  }
+  void run() override {
+    assert(PerfAsyncSharedMem, "PerfAsyncSharedMem must be set.");
+    struct timespec ts;
+    ts.tv_sec = PerfDataSamplingInterval / 1000;
+    ts.tv_nsec = (PerfDataSamplingInterval % 1000) * 1000000;
+    while (true) {
+      ::nanosleep(&ts, NULL);
+      long start;
+      if (log_is_enabled(Trace, perf, thread)) {
+        start = os::javaTimeNanos();
+      }
+      ::memcpy(PerfMemory::shared_start(), PerfMemory::start(), PerfMemory::used());
+      if (log_is_enabled(Trace, perf, thread)) {
+        long end = os::javaTimeNanos();
+        log_trace(perf, thread)("Asyncronously copied perf counters in " JLONG_FORMAT " ns", end - start);
+      }
+    }
+  }
+  const char* name() const override { return "AsyncPerf Thread"; }
+  const char* type_name() const override { return "AsyncPerfWriter"; }
+  void print_on(outputStream* st) const override {
+    st->print("\"%s\" ", name());
+    Thread::print_on(st);
+    st->cr();
+  }
+};
+
 /*
  * The engage() method is called at initialization time via
  * Thread::create_vm() to initialize the StatSampler and
  * register it with the WatcherThread as a periodic task.
+ *
+ * Also starts an asynchronous perf thread to write the perf
+ * counters to shared memory if PerfAsyncSharedMem is set.
  */
 void StatSampler::engage() {
 
@@ -87,6 +135,15 @@ void StatSampler::engage() {
     // start up the periodic task
     _task = new StatSamplerTask(PerfDataSamplingInterval);
     _task->enroll();
+  }
+  if (PerfAsyncSharedMem) {
+    AsyncPerfWriter* apw = new AsyncPerfWriter();
+    if (apw->_initialized) {
+      os::start_thread(apw);
+      log_debug(perf, thread)("Async perf thread started.");
+    } else {
+      delete apw;
+    }
   }
 }
 

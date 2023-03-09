@@ -1747,6 +1747,10 @@ const int ObjectAlignmentInBytes = 8;
           range(PeriodicTask::min_interval, max_jint)                       \
           constraint(PerfDataSamplingIntervalFunc, AfterErgo)               \
                                                                             \
+  product(bool, PerfAsyncSharedMem, false,                                  \
+          "Store performance data in shared memory but write it "           \
+          "asynchronuously")                                                \
+                                                                            \
   product(bool, PerfDisableSharedMem, false,                                \
           "Store performance data in standard memory")                      \
                                                                             \
