@@ -935,4 +935,15 @@ public:
   virtual void execute(DCmdSource source, TRAPS);
 };
 
+class PerfDataDCmd : public DCmd {
+public:
+  PerfDataDCmd(outputStream* output, bool heap) : DCmd(output,heap) { }
+  static const char* name() { return "VM.perf_data"; }
+  static const char* description() {
+    return "Returns the raw hsperf data content (only requires "
+           "`-XX:+UsePerfData` but not `-XX:-PerfDisableSharedMem`).";
+  }
+  static const char* impact() { return "Low"; }
+  virtual void execute(DCmdSource source, TRAPS);
+};
 #endif // SHARE_SERVICES_DIAGNOSTICCOMMAND_HPP
