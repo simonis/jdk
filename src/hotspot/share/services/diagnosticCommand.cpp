@@ -141,6 +141,7 @@ void DCmd::register_dcmds(){
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<CompilerDirectivesRemoveDCmd>(full_export, true, false));
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<CompilerDirectivesClearDCmd>(full_export, true, false));
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<CompilationMemoryStatisticDCmd>(full_export, true, false));
+  DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<ZeroUnusedMemoryDCmd>(full_export, true, false));
 
   // Enhanced JMX Agent Support
   // These commands won't be exported via the DiagnosticCommandMBean until an
@@ -1150,4 +1151,14 @@ void CompilationMemoryStatisticDCmd::execute(DCmdSource source, TRAPS) {
   const bool human_readable = _human_readable.value();
   const size_t minsize = _minsize.has_value() ? _minsize.value()._size : 0;
   CompilationMemoryStatistic::print_all_by_size(output(), human_readable, minsize);
+}
+
+void ZeroUnusedMemoryDCmd::execute(DCmdSource source, TRAPS) {
+  Universe::heap()->collect(GCCause::_dcmd_gc_run);
+  size_t res = Universe::heap()->zero_unused();
+  if (res == size_t(-1)) {
+    output()->print_cr("Zeroing unused memory not supported by %s", Universe::heap()->name());
+  } else {
+    output()->print_cr("Successfully zeroed " SIZE_FORMAT " bytes of unused heap", res);
+  }
 }

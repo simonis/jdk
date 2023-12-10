@@ -114,6 +114,10 @@ void ContiguousSpace::mangle_unused_area_complete() {
 }
 #endif  // NOT_PRODUCT
 
+size_t ContiguousSpace::zero_unused() {
+  return mangler()->zero_unused();
+}
+
 
 HeapWord* ContiguousSpace::forward(oop q, size_t size,
                                     CompactPoint* cp, HeapWord* compact_top) {

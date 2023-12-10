@@ -1053,3 +1053,20 @@ void GenCollectedHeap::record_gen_tops_before_GC() {
   }
 }
 #endif  // not PRODUCT
+
+class GenGCZeroUnusedClosure: public GenCollectedHeap::GenClosure {
+  size_t res;
+ public:
+   GenGCZeroUnusedClosure() : res(0) {}
+  void do_generation(Generation* gen) {
+    res += gen->zero_unused();
+  }
+  size_t getResult() {
+    return res;
+  }
+};
+size_t GenCollectedHeap::zero_unused() {
+  GenGCZeroUnusedClosure blk;
+  generation_iterate(&blk, false);  // not old-to-young.
+  return blk.getResult();
+}

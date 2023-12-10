@@ -280,6 +280,8 @@ class Generation: public CHeapObj<mtGC> {
   // Save the high water marks for the used space in a generation.
   virtual void record_spaces_top() {}
 
+  virtual size_t zero_unused() = 0;
+
   // Generations may keep statistics about collection. This method
   // updates those statistics. current_generation is the generation
   // that was most recently collected. This allows the generation to
