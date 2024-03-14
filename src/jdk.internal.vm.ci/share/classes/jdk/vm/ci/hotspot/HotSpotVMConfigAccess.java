@@ -144,6 +144,10 @@ public class HotSpotVMConfigAccess {
      * @throws JVMCIError if the field is static or not present
      */
     public <T> T getFieldOffset(String name, Class<T> type, String cppType) {
+        if ("JavaThread::_held_monitor_count".equals(name)) {
+            // JDK-8313882: Fix -Wconversion warnings in runtime code
+            cppType = "intx";
+        }
         return getFieldOffset0(name, type, null, cppType, null);
     }
 
@@ -252,6 +256,10 @@ public class HotSpotVMConfigAccess {
      * @throws JVMCIError if the field is not static or not present
      */
     public <T> T getFieldValue(String name, Class<T> type, String cppType) {
+        if ("HeapRegion::LogOfHRGrainBytes".equals(name)) {
+            // JDK-8314651: G1: Fix -Wconversion warnings in static fields of HeapRegion
+            cppType = "uint";
+        }
         return getFieldValue0(name, type, null, cppType, null);
     }
 
