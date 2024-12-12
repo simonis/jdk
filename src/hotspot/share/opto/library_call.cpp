@@ -247,6 +247,7 @@ bool LibraryCallKit::try_to_inline(int predicate) {
   case vmIntrinsics::_hashCode:                 return inline_native_hashcode(intrinsic()->is_virtual(), !is_static);
   case vmIntrinsics::_identityHashCode:         return inline_native_hashcode(/*!virtual*/ false,         is_static);
   case vmIntrinsics::_getClass:                 return inline_native_getClass();
+  case vmIntrinsics::_fillInStackTrace:         return inline_native_fillInStackTrace();
 
   case vmIntrinsics::_ceil:
   case vmIntrinsics::_floor:
@@ -4800,6 +4801,13 @@ bool LibraryCallKit::inline_native_getClass() {
   Node* obj = null_check_receiver();
   if (stopped())  return true;
   set_result(load_mirror_from_klass(load_object_klass(obj)));
+  return true;
+}
+
+bool LibraryCallKit::inline_native_fillInStackTrace() {
+  CallJavaNode* slow_call = generate_method_call(vmIntrinsics::_fillInStackTrace, false, false, false);
+  //set_result(slow_call);
+  set_result(argument(0));
   return true;
 }
 

@@ -28,6 +28,7 @@ package java.lang;
 import java.io.*;
 import java.util.*;
 import jdk.internal.event.ThrowableTracer;
+import jdk.internal.vm.annotation.IntrinsicCandidate;
 
 /**
  * The {@code Throwable} class is the superclass of all errors and
@@ -122,6 +123,7 @@ public class Throwable implements Serializable {
      * exceptions should be traced by JFR.
      */
     static volatile boolean jfrTracing;
+    //static final boolean jfrTracing = false;
 
     /**
      * The JVM saves some indication of the stack backtrace in this slot.
@@ -192,6 +194,7 @@ public class Throwable implements Serializable {
      * change.
      */
 
+    private static Throwable UNSET_CAUSE = new Throwable();
     /**
      * The throwable that caused this throwable to get thrown, or null if this
      * throwable was not caused by another throwable, or if the causative
@@ -202,7 +205,7 @@ public class Throwable implements Serializable {
      * @serial
      * @since 1.4
      */
-    private Throwable cause = this;
+    private Throwable cause = UNSET_CAUSE;
 
     /**
      * The stack trace, as returned by {@link #getStackTrace()}.
@@ -267,6 +270,7 @@ public class Throwable implements Serializable {
         }
     }
 
+    private static final boolean skipFillInStackTrace = Boolean.getBoolean("skipFillInStackTrace");
     /**
      * Constructs a new throwable with the specified detail message.  The
      * cause is not initialized, and may subsequently be initialized by
@@ -280,7 +284,7 @@ public class Throwable implements Serializable {
      */
     @SuppressWarnings("this-escape")
     public Throwable(String message) {
-        fillInStackTrace();
+        if (!skipFillInStackTrace) fillInStackTrace();
         detailMessage = message;
         if (jfrTracing) {
             ThrowableTracer.traceThrowable(getClass(), message);
@@ -445,7 +449,7 @@ public class Throwable implements Serializable {
      * @since 1.4
      */
     public synchronized Throwable getCause() {
-        return (cause==this ? null : cause);
+        return (cause==UNSET_CAUSE ? null : cause);
     }
 
     /**
@@ -485,7 +489,7 @@ public class Throwable implements Serializable {
      * @since  1.4
      */
     public synchronized Throwable initCause(Throwable cause) {
-        if (this.cause != this)
+        if (this.cause != UNSET_CAUSE)
             throw new IllegalStateException("Can't overwrite cause with " +
                                             Objects.toString(cause, "a null"), this);
         if (cause == this)
@@ -828,6 +832,7 @@ public class Throwable implements Serializable {
         return this;
     }
 
+    @IntrinsicCandidate
     private native Throwable fillInStackTrace(int dummy);
 
     /**

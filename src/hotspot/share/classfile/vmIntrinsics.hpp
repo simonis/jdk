@@ -118,6 +118,10 @@ class methodHandle;
   do_intrinsic(_notifyAll,                java_lang_Object,       notifyAll_name, void_method_signature,         F_RN)  \
    do_name(     notifyAll_name,                                  "notifyAll")                                           \
                                                                                                                         \
+  /* Not really an intrinsic - only used to handle Throwable::fillInStackTrace() specially during Escape Analysis. */   \
+  do_intrinsic(_fillInStackTrace,         java_lang_Throwable, fillInStackTrace_name, int_throwable_signature,  F_RN)   \
+   do_signature(int_throwable_signature, "(I)Ljava/lang/Throwable;")                                                    \
+                                                                                                                        \
   /* Math & StrictMath intrinsics are defined in terms of just a few signatures: */                                     \
   do_class(java_lang_Math,                "java/lang/Math")                                                             \
   do_class(java_lang_StrictMath,          "java/lang/StrictMath")                                                       \

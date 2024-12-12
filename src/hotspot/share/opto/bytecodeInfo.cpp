@@ -281,7 +281,7 @@ bool InlineTree::should_not_inline(ciMethod* callee_method, ciMethod* caller_met
 
   // don't inline exception code unless the top method belongs to an
   // exception class
-  if (caller_tree() != nullptr &&
+  if (!UseNewCode && caller_tree() != nullptr &&
       callee_method->holder()->is_subclass_of(C->env()->Throwable_klass())) {
     const InlineTree *top = this;
     while (top->caller_tree() != nullptr) top = top->caller_tree();

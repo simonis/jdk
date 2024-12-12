@@ -2290,7 +2290,11 @@ void ConnectionGraph::process_call_arguments(CallNode *call) {
               // The argument global escapes
               set_escape_state(arg_ptn, PointsToNode::GlobalEscape NOT_PRODUCT(COMMA trace_arg_escape_message(call)));
             } else {
-              set_escape_state(arg_ptn, PointsToNode::ArgEscape NOT_PRODUCT(COMMA trace_arg_escape_message(call)));
+              if (UseNewCode2 && meth->intrinsic_id() == vmIntrinsics::_fillInStackTrace) {
+                set_escape_state(arg_ptn, PointsToNode::NoEscape NOT_PRODUCT(COMMA trace_arg_escape_message(call)));
+              } else {
+                set_escape_state(arg_ptn, PointsToNode::ArgEscape NOT_PRODUCT(COMMA trace_arg_escape_message(call)));
+              }
               if (!call_analyzer->is_arg_local(k)) {
                 // The argument itself doesn't escape, but any fields might
                 set_fields_escape_state(arg_ptn, PointsToNode::GlobalEscape NOT_PRODUCT(COMMA trace_arg_escape_message(call)));
