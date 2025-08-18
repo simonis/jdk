@@ -576,7 +576,8 @@ class ExtendedTextSourceLabel extends ExtendedTextLabel implements Decoration.La
 *   Some layout engines may insert 0xffff glyphs for characters ligaturized away, but
 *   not all do, and it cannot be relied upon.
 * - each glyph maps to a single character, when multiple glyphs exist for a character they all map to it, but
-*   no two characters map to the same glyph
+*   no two characters map to the same glyph (this is only true in the old, ICU layout engine which inserted 0xffff
+*   glyphs for ligaturized characters)
 * - multiple glyphs mapping to the same character need not be in sequence (thai, tamil have split characters)
 * - glyphs may be arbitrarily reordered (Indic reorders glyphs)
 * - all glyphs share the same bidi level
@@ -648,11 +649,37 @@ class ExtendedTextSourceLabel extends ExtendedTextLabel implements Decoration.La
         glyphinfo = new float[gv.getNumGlyphs() * numvals];
     }
 
+    boolean patch = Boolean.getBoolean("patch");
+    if (patch) {
+        float[] patchedGlyphinfo = new float[glyphinfo.length + numvals];
+        for (int i = 0, j = 0; i < glyphinfo.length / numvals; i++) {
+            System.arraycopy(glyphinfo, i * numvals, patchedGlyphinfo, numvals * j, numvals);
+            j++;
+            if (i == 13) {
+                System.arraycopy(glyphinfo, (i + 1) * numvals, patchedGlyphinfo, numvals * j, numvals);
+                patchedGlyphinfo[numvals * j + advx] = 0f;
+                j++;
+            }
+        }
+        glyphinfo = patchedGlyphinfo;
+    }
+
     int numGlyphs = gv.getNumGlyphs();
     if (numGlyphs == 0) {
         return glyphinfo;
     }
     int[] indices = gv.getGlyphCharIndices(0, numGlyphs, null);
+    if (patch) {
+        numGlyphs++;
+        int[] patchedIndices = new int[indices.length + 1];
+        for (int i = 0, j = 0; i < indices.length; i++) {
+            patchedIndices[j++] = indices[i];
+            if (i == 13) {
+                patchedIndices[j++] = 16;
+            }
+        }
+        indices = patchedIndices;
+    }
     float[] charInfo = new float[source.getLength() * numvals];
 
     if (DEBUG) {
@@ -661,7 +688,7 @@ class ExtendedTextSourceLabel extends ExtendedTextLabel implements Decoration.La
       System.err.println("indices.len: " + indices.length);
       for (int i = 0; i < numGlyphs; ++i) {
         System.err.println("g: " + i +
-            "  v: " + gv.getGlyphCode(i) +
+            "  v: " + (patch ? (i == 14 ? 65535 : (i < 14) ? gv.getGlyphCode(i) : gv.getGlyphCode(i-1)) : gv.getGlyphCode(i)) +
             ", x: " + glyphinfo[i*numvals+posx] +
             ", a: " + glyphinfo[i*numvals+advx] +
             ", n: " + indices[i]);
@@ -730,8 +757,8 @@ class ExtendedTextSourceLabel extends ExtendedTextLabel implements Decoration.La
 
         while (gx != gxlimit &&
                ((glyphinfo[gp + advx] == 0) ||
-               (indices[gx] <= maxIndex) ||
-               (maxIndex - minIndex > clusterExtraGlyphs))) {
+               (indices[gx] <= maxIndex)/* ||
+               (maxIndex - minIndex > clusterExtraGlyphs)*/)) {
 
             ++clusterExtraGlyphs; // have an extra glyph in this cluster
             if (DEBUG) {
