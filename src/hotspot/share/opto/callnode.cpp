@@ -315,7 +315,9 @@ bool JVMState::same_calls_as(const JVMState* that) const {
     if (p->_method != q->_method)    return false;
     if (p->_method == nullptr)       return true;   // bci is irrelevant
     if (p->_bci    != q->_bci)       return false;
-    if (p->_reexecute != q->_reexecute)  return false;
+    if (!UseNewCode) {
+      if (p->_reexecute != q->_reexecute)  return false;
+    }
     p = p->caller();
     q = q->caller();
     if (p == q)                      return true;

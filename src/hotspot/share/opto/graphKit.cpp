@@ -595,7 +595,16 @@ void GraphKit::builtin_throw(Deoptimization::DeoptReason reason,
 
         const TypeKlassPtr* ex_type = TypeKlassPtr::make(ex_ciInstKlass);
         kill_dead_locals();
-        Node* ex_node = new_instance(makecon(ex_type), nullptr, nullptr, true);
+        Node* ex_node = nullptr;
+        Node* normal_control = control();
+
+        //PreserveJVMState pjvms(this);
+        //PreserveReexecuteState preexecs(this);
+        sync_jvms();
+        jvms()->set_should_reexecute(true);
+
+        ex_node = new_instance(makecon(ex_type), nullptr, nullptr, true);
+
         set_argument(0, ex_node);
 
         // The following code is modeled after DirectCallGenerator::generate().
@@ -611,12 +620,19 @@ void GraphKit::builtin_throw(Deoptimization::DeoptReason reason,
         call->set_implicit_exception_init(true);
         kit.set_arguments_for_java_call(call);
         kit.set_edges_for_java_call(call, false, false);
-        Node* ret = kit.set_results_for_java_call(call, false);
-        kit.push_node(init->return_type()->basic_type(), ret);
-        JVMState* new_jvms = kit.transfer_exceptions_into_jvms();
+        //Node* ret = kit.set_results_for_java_call(call, false);
+        //kit.push_node(init->return_type()->basic_type(), ret);
+        if (kit.has_exceptions()) {
+          kit._exceptions = nullptr;
+          RegionNode* catch_all_region = new RegionNode(3);
+          catch_all_region->init_req(1, normal_control);
+          catch_all_region->init_req(2, control());
+          set_control(_gvn.transform(catch_all_region));
+        }
+        //JVMState* new_jvms = kit.transfer_exceptions_into_jvms();
+        //add_exception_states_from(new_jvms);
+        //set_jvms(new_jvms);
 
-        add_exception_states_from(new_jvms);
-        set_jvms(new_jvms);
         add_exception_state(make_exception_state(ex_node));
         return;
       }
