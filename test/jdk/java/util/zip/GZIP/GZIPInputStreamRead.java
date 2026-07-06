@@ -51,6 +51,12 @@ class GZIPInputStreamRead {
 
     private static final Random random = RandomFactory.getRandom();
 
+    // System property which configures whether GZIPInputStream skips the call to InputStream.available()
+    // when checking for additional GZIP members in a stream. Tests which specifically test the non-blocking
+    // behavior of 'jdk.util.gzip.tryReadAheadAfterTrailer=false' have to be skipped when the property
+    // is set to 'true'.
+    private static final boolean alwaysReadNextMember = Boolean.getBoolean("jdk.util.gzip.tryReadAheadAfterTrailer");
+
     /*
      * Generates GZIP content containing multiple members and then verifies
      * that using GZIPInputStream to decompress that content generates the correct
@@ -172,7 +178,9 @@ class GZIPInputStreamRead {
             while ((n = gzipIn.read(tmpBuf)) != -1) {
                 decompressedBaos.write(tmpBuf, 0, n);
             }
-            assertTrue(availableInvoked.get(), "InputStream.available() wasn't invoked");
+            if (!alwaysReadNextMember) {
+              assertTrue(availableInvoked.get(), "InputStream.available() wasn't invoked");
+            }
             final byte[] decompressed = decompressedBaos.toByteArray();
             // verify the decompressed content, it should represent the two GZIP members
             assertEquals(rawUncompressedMember1.length + rawUncompressedMember2.length,

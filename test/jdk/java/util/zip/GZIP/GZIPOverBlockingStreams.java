@@ -76,6 +76,11 @@ class GZIPOverBlockingStreams {
     private static Server nonHttpServer;
     private static HttpServer httpServer;
 
+    // System property which configures whether GZIPInputStream skips the call to InputStream.available()
+    // when checking for additional GZIP members in a stream. Tests which specifically test the non-blocking
+    // behavior of 'jdk.util.gzip.tryReadAheadAfterTrailer=false' have to be skipped when the property
+    // is set to 'true'.
+    private static final boolean alwaysReadNextMember = Boolean.getBoolean("jdk.util.gzip.tryReadAheadAfterTrailer");
 
     @BeforeAll
     static void beforeAll() throws Exception {
@@ -119,7 +124,7 @@ class GZIPOverBlockingStreams {
     static List<Arguments> socketStreamTestArgs() {
         final List<Arguments> args = new ArrayList<>();
         final List<Integer> numMembers = numGZIPMembers();
-        for (boolean shouldCloseSocket : new boolean[]{true, false}) {
+        for (boolean shouldCloseSocket : new boolean[]{true, alwaysReadNextMember ? true : false}) {
             for (int n : numMembers) {
                 args.add(Arguments.of(n, shouldCloseSocket));
             }
@@ -166,7 +171,7 @@ class GZIPOverBlockingStreams {
     static List<Arguments> httpTestArgs() {
         final List<Arguments> args = new ArrayList<>();
         final List<Integer> numMembers = numGZIPMembers();
-        for (boolean chunkedOrNot : new boolean[]{true, false}) {
+        for (boolean chunkedOrNot : new boolean[]{alwaysReadNextMember ? false : true, false}) {
             for (int n : numMembers) {
                 args.add(Arguments.of(n, chunkedOrNot));
             }
